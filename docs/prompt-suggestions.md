@@ -44,6 +44,9 @@ feature enabled in the official 0.161.0 binary.
 
 ## Building and checking
 
+For downloadable Apple Silicon and Intel packages, see
+[codex-suggest for macOS](prompt-suggestions-macos.md).
+
 Use the Rust version in `codex-rs/rust-toolchain.toml` and the build prerequisites
 in [install.md](install.md). On this machine Rust is installed separately under
 `~/.local/share/codex-suggestions-build`, without changing shell startup files.

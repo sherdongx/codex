@@ -1,0 +1,100 @@
+name: Build codex-suggest for macOS
+
+on:
+  push:
+    branches: ["feature/prompt-suggestions", "feature/macos-packages"]
+    paths:
+      - ".github/workflows/codex-suggest-macos.yml"
+      - ".github/actions/setup-rusty-v8/**"
+      - "codex-rs/**"
+      - "scripts/codex_package/**"
+      - "scripts/build_codex_package.py"
+      - "scripts/macos/**"
+      - "docs/prompt-suggestions-macos.md"
+      - "third_party/v8/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-suggest-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            arch: arm64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            arch: x86_64
+    env:
+      CODEX_REPO_ROOT: ${{ github.workspace }}
+      MACOSX_DEPLOYMENT_TARGET: "15.0"
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      # Keep optimized builds within the standard Apple Silicon runner's memory.
+      CARGO_PROFILE_RELEASE_LTO: "off"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+      CARGO_PROFILE_RELEASE_STRIP: symbols
+      TARGET: ${{ matrix.target }}
+      PACKAGE_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            codex-rs/target
+          key: codex-suggest-macos-v1-${{ matrix.target }}-${{ hashFiles('codex-rs/Cargo.lock', 'codex-rs/rust-toolchain.toml') }}
+      - uses: ./.github/actions/setup-rusty-v8
+        with:
+          target: ${{ matrix.target }}
+      - name: Check installer and package helpers
+        run: |
+          python3 -m unittest discover -s scripts/macos -p 'test_*.py' -v
+          python3 -m unittest discover -s scripts/codex_package -t scripts -p 'test_*.py'
+          bash -n scripts/macos/package-codex-suggest.sh
+          sh -n scripts/macos/install-codex-suggest.sh
+      - name: Build CLI and code-mode helper
+        working-directory: codex-rs
+        run: cargo build --locked --release --target "$TARGET" --bin codex --bin codex-code-mode-host
+      - name: Package, sign, and smoke-test
+        run: bash scripts/macos/package-codex-suggest.sh "$TARGET" "codex-rs/target/$TARGET/release" dist
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: codex-suggest-macos-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Explain downloads
+        run: |
+          {
+            echo "### codex-suggest for macOS $PACKAGE_ARCH"
+            echo "Built from commit $GITHUB_SHA; requires macOS 15 or newer."
+            echo "Download this job's artifact, unzip it, then extract the tar.gz and run ./install.sh."
+            echo "The archive includes README.md, LICENSE, NOTICE, and a SHA-256 checksum."
+            echo "These personal builds are ad-hoc signed, not Apple-notarized."
+          } >> "$GITHUB_STEP_SUMMARY"
