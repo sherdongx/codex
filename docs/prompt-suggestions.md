@@ -59,6 +59,7 @@ export OPENSSL_STATIC=1
 export CARGO_BUILD_JOBS=4
 export CARGO_PROFILE_DEV_DEBUG=0
 export CARGO_PROFILE_TEST_DEBUG=0
+export RUST_MIN_STACK=8388608
 cargo test --locked -p codex-tui --lib prompt_suggestion
 cargo build --locked -p codex-cli --bin codex
 ```
