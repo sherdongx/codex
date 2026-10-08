@@ -14,7 +14,7 @@ or Right Arrow take priority.
 Suggestions are never submitted automatically. Failed, interrupted and replayed
 turns do not trigger them; new turns and thread changes cancel pending results.
 
-Generation uses the current model with high reasoning effort and recent visible
+Generation uses the current model with low reasoning effort and recent visible
 conversation text (the same bounded history selection used by recaps: up to eight
 exchanges). Each eligible response adds a model request and therefore consumes
 usage. Suggestions may be absent when the model returns no suitable continuation,

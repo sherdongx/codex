@@ -104,7 +104,7 @@ impl App {
                     "required": ["suggestion"],
                     "additionalProperties": false,
                 }),
-                Some(ReasoningEffort::High),
+                Some(ReasoningEffort::Low),
                 receiver,
                 request.cancellation.clone(),
             )
