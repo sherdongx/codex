@@ -74,6 +74,11 @@
 //! - Local in-session history (full text + text elements + local/remote image attachments).
 //!
 //! Plain-text history recall strips images and their placeholders.
+//!
+//! Follow-up suggestions live outside the draft. Empty, focused, editable composers show
+//! them dimly; Tab copies one into the draft and a separate Enter submits. Escape cancels
+//! even a pending suggestion. Popups, Vim Escape, attachments, and paste bursts take precedence.
+//! Interactive transcript footers hide the suggestion and its reserved height until editing resumes.
 //! When recalling a persistent entry, encoded task links restore atomic elements and bindings.
 //! Recall moves the cursor to the end. Question editors copy primary history on recall/search;
 //! draft capture cancels previews, and restoration resets traversal.
@@ -379,6 +384,7 @@ mod paste_input;
 mod popup_state;
 mod reconnect;
 pub(crate) use reconnect::RestrictedInputMode;
+mod prompt_suggestions;
 mod slash_input;
 mod sparkle;
 mod status_surface;
@@ -610,6 +616,9 @@ pub(crate) struct ChatComposer {
     luna_reserve_active: bool,
     attachments: AttachmentState,
     placeholder_text: String,
+    prompt_suggestion: Option<crate::prompt_suggestions::PromptSuggestion>,
+    suggestion_tab_reserved: KeymapContextSet,
+    suggestion_tab_accepted: bool,
     blocks_direct_input: bool,
     is_task_running: bool,
     queue_submissions: bool,
@@ -786,6 +795,9 @@ impl ChatComposer {
             luna_reserve_active: false,
             attachments: AttachmentState::default(),
             placeholder_text,
+            prompt_suggestion: None,
+            suggestion_tab_reserved: KeymapContextSet::default(),
+            suggestion_tab_accepted: false,
             blocks_direct_input: false,
             is_task_running: false,
             queue_submissions: false,
@@ -1027,6 +1039,22 @@ impl ChatComposer {
     /// the same snapshot's editor bindings so a live remap cannot leave submit
     /// keys updated while cursor/editing keys still use old defaults.
     pub(crate) fn set_keymap_bindings(&mut self, keymap: &RuntimeKeymap) {
+        self.suggestion_tab_reserved = crate::keymap::keymap_action_ids()
+            .filter(|action| {
+                matches!(
+                    action.context,
+                    KeymapContext::Editor | KeymapContext::VimNormal | KeymapContext::Composer
+                ) && !(action.context == KeymapContext::Composer && action.action == "queue")
+                    && crate::keymap::bindings_for_action(
+                        keymap,
+                        action.context.config_name(),
+                        action.action,
+                    )
+                    .is_some_and(|bindings| bindings.is_pressed(KeyCode::Tab.into()))
+            })
+            .fold(KeymapContextSet::default(), |contexts, action| {
+                contexts.with(action.context)
+            });
         self.submit_keys = keymap.composer.submit.clone();
         self.queue_keys = keymap.composer.queue.clone();
         self.toggle_shortcuts_keys = keymap.composer.toggle_shortcuts.clone();
@@ -1947,6 +1975,12 @@ impl ChatComposer {
 
     /// Handle a key event coming from the main UI.
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> (InputResult, bool) {
+        self.suggestion_tab_accepted &= key_event.code == KeyCode::Tab
+            && key_event.modifiers == KeyModifiers::NONE
+            && key_event.kind != KeyEventKind::Release;
+        if self.suggestion_tab_accepted {
+            return (InputResult::None, false);
+        }
         if !self.draft.input_enabled {
             return (InputResult::None, false);
         }
@@ -3504,6 +3538,9 @@ impl ChatComposer {
             self.draft.textarea.enter_vim_insert_mode();
             return (InputResult::None, true);
         }
+        if self.handle_prompt_suggestion_key(key_event) {
+            return (InputResult::None, true);
+        }
         if key_event.code == KeyCode::Esc {
             if self.is_empty() {
                 let next_mode = esc_hint_mode(self.footer.mode, self.is_task_running);
@@ -4367,6 +4404,9 @@ impl ChatComposer {
     }
 
     pub fn set_task_running(&mut self, running: bool) {
+        if running {
+            self.clear_prompt_suggestion();
+        }
         self.is_task_running = running;
     }
 
@@ -4989,7 +5029,9 @@ impl ChatComposer {
                 }
             }
         }
-        if !self.draft.input_enabled || textarea_is_empty {
+        if let Some(lines) = self.prompt_suggestion_lines(textarea_rect.width, options) {
+            Paragraph::new(lines).render(textarea_rect, buf);
+        } else if !self.draft.input_enabled || textarea_is_empty {
             let text = if self.draft.input_enabled {
                 self.placeholder_text.as_str().to_string()
             } else {

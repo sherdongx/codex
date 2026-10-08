@@ -14,7 +14,7 @@ pub(super) const RECAP_HISTORY_MAX_TURNS: usize = 8;
 const OMITTED_HISTORY: &str = "[Earlier exchanges omitted]\n\n";
 const EXCERPT_MARKER: &str = "\n[... excerpted ...]\n";
 
-pub(super) fn recap_history(cells: &[Arc<dyn HistoryCell>]) -> String {
+pub(in crate::app) fn recap_history(cells: &[Arc<dyn HistoryCell>]) -> String {
     let exchanges = recent_exchanges(cells);
     let Some(latest) = exchanges.last() else {
         return String::new();

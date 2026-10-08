@@ -287,6 +287,7 @@ mod input_flow;
 mod input_restore;
 mod input_submission;
 mod interrupts;
+mod prompt_suggestions;
 mod questions;
 mod startup_submission;
 use self::interrupts::InterruptManager;
@@ -1785,6 +1786,7 @@ impl ChatWidget {
     }
 
     pub(crate) fn show_external_writer_thread(&mut self) {
+        self.clear_prompt_suggestion();
         self.cancel_image_submission();
         self.blocks_direct_input = true;
         self.external_writer_view = true;

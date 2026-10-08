@@ -329,6 +329,17 @@ pub(crate) enum AppEvent {
         thread_id: ThreadId,
         request_id: Uuid,
     },
+    /// Generate a next-message suggestion for one live completed turn.
+    GeneratePromptSuggestion(crate::prompt_suggestions::SuggestionRequest),
+    PromptSuggestionStarted {
+        request: crate::prompt_suggestions::SuggestionRequest,
+        result: Result<(String, String), String>,
+    },
+    PromptSuggestionFinished {
+        request: crate::prompt_suggestions::SuggestionRequest,
+        temporary_thread_id: ThreadId,
+        text: Option<String>,
+    },
     /// Register a hidden title-generation thread started in the background.
     ThreadTitleStarted {
         cancellation: CancellationToken,

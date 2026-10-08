@@ -121,6 +121,31 @@ impl App {
         app_server_client: &AppServerSession,
         notification: ServerNotification,
     ) {
+        if let ServerNotification::ThreadStarted(started) = &notification
+            && started.thread.ephemeral
+            && matches!(started.thread.thread_source.as_ref(), Some(ThreadSource::Feature(source)) if source == "prompt_suggestion")
+            && let Ok(id) = ThreadId::from_string(&started.thread.id)
+        {
+            self.hidden_prompt_threads.push_back(id);
+            if self.hidden_prompt_threads.len() > 32 {
+                self.hidden_prompt_threads.pop_front();
+            }
+            return;
+        }
+        if let ServerNotificationThreadTarget::Thread(id) =
+            server_notification_thread_target(&notification)
+            && self.hidden_prompt_threads.contains(&id)
+        {
+            if let Some(sender) = self.temporary_structured_requests.get(&id)
+                && matches!(
+                    &notification,
+                    ServerNotification::ItemCompleted(_) | ServerNotification::TurnCompleted(_)
+                )
+            {
+                let _ = sender.send(notification);
+            }
+            return;
+        }
         // A picker can leave an old runtime's close notification queued while the same thread
         // is resumed. Thread IDs survive reloads, so confirm that the displayed thread is still
         // unloaded before routing a close that would exit the TUI or switch away from it.
@@ -552,9 +577,10 @@ impl App {
         request: ServerRequest,
     ) {
         let thread_id = server_request_thread_id(&request);
-        if thread_id
-            .is_some_and(|thread_id| self.temporary_structured_requests.contains_key(&thread_id))
-        {
+        if thread_id.is_some_and(|thread_id| {
+            self.temporary_structured_requests.contains_key(&thread_id)
+                || self.hidden_prompt_threads.contains(&thread_id)
+        }) {
             if let Err(err) = self
                 .reject_app_server_request(
                     app_server_client,
