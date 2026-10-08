@@ -33,14 +33,16 @@ jobs:
           - runner: macos-15
             target: aarch64-apple-darwin
             arch: arm64
+            build-jobs: 2
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             arch: x86_64
+            build-jobs: 4
     env:
       CODEX_REPO_ROOT: ${{ github.workspace }}
       MACOSX_DEPLOYMENT_TARGET: "15.0"
       CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-      CARGO_BUILD_JOBS: "2"
+      CARGO_BUILD_JOBS: ${{ matrix.build-jobs }}
       CARGO_INCREMENTAL: "0"
       # Keep optimized builds within the standard Apple Silicon runner's memory.
       CARGO_PROFILE_RELEASE_LTO: "off"
