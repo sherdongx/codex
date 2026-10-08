@@ -38,7 +38,7 @@ for resource in codex-path/rg codex-resources/zsh/bin/zsh; do
 done
 for executable in bin/codex bin/codex-code-mode-host codex-path/rg codex-resources/zsh/bin/zsh; do
   binary="$package_dir/$executable"
-  lipo -verify_arch "$arch" "$binary"
+  lipo "$binary" -verify_arch "$arch"
   codesign --verify --strict "$binary"
   xcrun vtool -show-build "$binary"
   # Archives must not depend on Homebrew or other build-runner library paths.
