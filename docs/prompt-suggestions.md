@@ -7,13 +7,14 @@ generation rather than the removed implementation's conversation fork.
 ## Behavior
 
 After a successful live response, a suggested next message can appear as dim text
-in the empty input box. Press **Tab** to put it into the editable draft, then
-**Enter** to send it. Press **Escape** to dismiss it. Typing hides it. Existing
-drafts, popups, attachments, paste handling and remapped Tab bindings take priority.
+in the empty input box. Press **Tab** or **Right Arrow** to put it into the editable
+draft, then **Enter** to send it. Press **Escape** to dismiss it. Typing hides it.
+Existing drafts, popups, attachments, paste handling and custom bindings for Tab
+or Right Arrow take priority.
 Suggestions are never submitted automatically. Failed, interrupted and replayed
 turns do not trigger them; new turns and thread changes cancel pending results.
 
-Generation uses the current model with low reasoning effort and recent visible
+Generation uses the current model with high reasoning effort and recent visible
 conversation text (the same bounded history selection used by recaps: up to eight
 exchanges). Each eligible response adds a model request and therefore consumes
 usage. Suggestions may be absent when the model returns no suitable continuation,

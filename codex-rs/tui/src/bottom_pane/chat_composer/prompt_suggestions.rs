@@ -1,4 +1,4 @@
-//! Keep suggestions outside the draft until Tab accepts them. Typing hides them,
+//! Keep suggestions outside the draft until Tab or Right Arrow accepts them. Typing hides them,
 //! Escape cancels them, and stale or empty results cannot capture input.
 //! Transcript interactions hide suggestion text and its reserved height without cancelling it.
 
@@ -80,22 +80,23 @@ impl ChatComposer {
             self.clear_prompt_suggestion();
             return true;
         }
-        if key.code == KeyCode::Tab
-            && ![
-                KeymapContext::Editor,
-                KeymapContext::VimNormal,
-                KeymapContext::Composer,
-            ]
-            .into_iter()
-            .any(|context| {
-                self.suggestion_tab_reserved.contains(context)
-                    && self.keymap_contexts().contains(context)
-            })
+        let reserved = match key.code {
+            KeyCode::Tab => self.suggestion_tab_reserved,
+            KeyCode::Right => self.suggestion_right_reserved,
+            _ => return false,
+        };
+        if ![
+            KeymapContext::Editor,
+            KeymapContext::VimNormal,
+            KeymapContext::Composer,
+        ]
+        .into_iter()
+        .any(|context| reserved.contains(context) && self.keymap_contexts().contains(context))
             && let Some(text) = self.visible_prompt_suggestion().map(str::to_owned)
         {
             self.clear_prompt_suggestion();
             self.insert_str(&text);
-            self.suggestion_tab_accepted = true;
+            self.suggestion_tab_accepted = key.code == KeyCode::Tab;
             return true;
         }
         false

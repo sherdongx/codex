@@ -19,35 +19,47 @@ fn request() -> SuggestionRequest {
 }
 
 #[test]
-fn prompt_suggestion_tab_edits_and_enter_submits() {
-    let (mut composer, _rx) = new_test_composer();
-    composer.set_vim_enabled(/*enabled*/ true);
-    composer.handle_key_event(KeyCode::Esc.into());
-    let request = request();
-    composer.set_prompt_suggestion(request.clone());
-    composer.apply_prompt_suggestion(&request, Some("Add a regression test".into()));
-    assert!(composer.is_empty());
-    let (result, _) = composer.handle_key_event(KeyCode::Tab.into());
-    assert!(matches!(result, InputResult::None));
-    assert_eq!(composer.draft.textarea.text(), "Add a regression test");
-    assert!(request.cancellation.is_cancelled());
-    for kind in [KeyEventKind::Press, KeyEventKind::Repeat] {
-        let (result, _) = composer.handle_key_event(KeyEvent::new_with_kind(
-            KeyCode::Tab,
-            KeyModifiers::NONE,
-            kind,
-        ));
-        assert!(matches!(result, InputResult::None));
-        assert_eq!(composer.draft.textarea.text(), "Add a regression test");
+fn prompt_suggestion_tab_or_right_edits_and_enter_submits() {
+    for key in [KeyCode::Tab, KeyCode::Right] {
+        for vim in [false, true] {
+            let (mut composer, _rx) = new_test_composer();
+            composer.set_vim_enabled(vim);
+            if vim {
+                composer.handle_key_event(KeyCode::Esc.into());
+            }
+            let request = request();
+            composer.set_prompt_suggestion(request.clone());
+            composer.apply_prompt_suggestion(&request, Some("Add a regression test".into()));
+            assert!(composer.is_empty());
+            let (result, _) = composer.handle_key_event(key.into());
+            assert!(matches!(result, InputResult::None));
+            assert_eq!(
+                composer.current_text(),
+                "Add a regression test",
+                "{key:?}, vim={vim}"
+            );
+            assert!(request.cancellation.is_cancelled());
+            for kind in [KeyEventKind::Press, KeyEventKind::Repeat] {
+                let (result, _) = composer.handle_key_event(KeyEvent::new_with_kind(
+                    key,
+                    KeyModifiers::NONE,
+                    kind,
+                ));
+                assert!(matches!(result, InputResult::None));
+                assert_eq!(composer.current_text(), "Add a regression test");
+            }
+            if vim {
+                composer.handle_key_event(KeyCode::Char('u').into());
+                assert!(composer.is_empty());
+                composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+                assert_eq!(composer.current_text(), "Add a regression test");
+            }
+            let (result, _) = composer.handle_key_event(KeyCode::Enter.into());
+            assert!(
+                matches!(result, InputResult::Submitted { text, .. } if text == "Add a regression test")
+            );
+        }
     }
-    composer.handle_key_event(KeyCode::Char('u').into());
-    assert!(composer.is_empty());
-    composer.handle_key_event(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
-    assert_eq!(composer.draft.textarea.text(), "Add a regression test");
-    let (result, _) = composer.handle_key_event(KeyCode::Enter.into());
-    assert!(
-        matches!(result, InputResult::Submitted { text, .. } if text == "Add a regression test")
-    );
 }
 
 #[test]
@@ -132,19 +144,68 @@ fn prompt_suggestion_yields_to_remapped_tab_and_popup() {
 }
 
 #[test]
-fn prompt_suggestion_tab_only_yields_to_active_vim_bindings() {
+fn prompt_suggestion_acceptance_yields_only_to_active_vim_bindings() {
+    for key in [KeyCode::Tab, KeyCode::Right] {
+        let (mut composer, _rx) = new_test_composer();
+        composer.set_vim_enabled(/*enabled*/ true);
+        composer.handle_key_event(KeyCode::Esc.into());
+        let request = request();
+        composer.set_prompt_suggestion(request.clone());
+        composer.apply_prompt_suggestion(&request, Some("Continue".into()));
+        let mut keymap = crate::keymap::RuntimeKeymap::defaults();
+        keymap.vim_normal.undo = vec![crate::key_hint::plain(key)];
+        composer.set_keymap_bindings(&keymap);
+        composer.handle_key_event(key.into());
+        assert!(composer.is_empty());
+        composer.handle_key_event(KeyCode::Char('i').into());
+        composer.handle_key_event(key.into());
+        assert_eq!(composer.current_text(), "Continue", "{key:?}");
+    }
+}
+
+#[test]
+fn prompt_suggestion_right_respects_remapped_submission() {
+    for queue in [false, true] {
+        let (mut composer, _rx) = new_test_composer();
+        let request = request();
+        composer.set_prompt_suggestion(request.clone());
+        composer.apply_prompt_suggestion(&request, Some("Continue".into()));
+        let mut config = codex_config::types::TuiKeymap::default();
+        config.editor.move_right = Some(codex_config::types::KeybindingsSpec::Many(vec![]));
+        config.vim_normal.move_right = Some(codex_config::types::KeybindingsSpec::Many(vec![]));
+        let action = if queue {
+            &mut config.composer.queue
+        } else {
+            &mut config.composer.submit
+        };
+        *action = Some(codex_config::types::KeybindingsSpec::One(
+            codex_config::types::KeybindingSpec("right".into()),
+        ));
+        let keymap = crate::keymap::RuntimeKeymap::from_config(&config).expect("keymap");
+        composer.set_keymap_bindings(&keymap);
+        composer.handle_key_event(KeyCode::Right.into());
+        assert!(composer.is_empty());
+        assert!(!request.cancellation.is_cancelled());
+    }
+}
+
+#[test]
+fn prompt_suggestion_right_preserves_modifiers_and_existing_draft() {
     let (mut composer, _rx) = new_test_composer();
-    composer.set_vim_enabled(/*enabled*/ true);
-    composer.handle_key_event(KeyCode::Esc.into());
     let request = request();
     composer.set_prompt_suggestion(request.clone());
     composer.apply_prompt_suggestion(&request, Some("Continue".into()));
-    let mut keymap = crate::keymap::RuntimeKeymap::defaults();
-    keymap.vim_normal.undo = vec![crate::key_hint::plain(KeyCode::Tab)];
-    composer.set_keymap_bindings(&keymap);
-    composer.handle_key_event(KeyCode::Tab.into());
-    assert!(composer.is_empty());
-    composer.handle_key_event(KeyCode::Char('i').into());
-    composer.handle_key_event(KeyCode::Tab.into());
-    assert_eq!(composer.current_text(), "Continue");
+    for modifier in [
+        KeyModifiers::CONTROL,
+        KeyModifiers::ALT,
+        KeyModifiers::SHIFT,
+    ] {
+        composer.handle_key_event(KeyEvent::new(KeyCode::Right, modifier));
+        assert!(composer.is_empty());
+        assert!(!request.cancellation.is_cancelled());
+    }
+    composer.handle_paste("My draft".into());
+    composer.handle_key_event(KeyCode::Right.into());
+    assert_eq!(composer.current_text(), "My draft");
+    assert!(!request.cancellation.is_cancelled());
 }

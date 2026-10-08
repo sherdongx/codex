@@ -76,7 +76,7 @@
 //! Plain-text history recall strips images and their placeholders.
 //!
 //! Follow-up suggestions live outside the draft. Empty, focused, editable composers show
-//! them dimly; Tab copies one into the draft and a separate Enter submits. Escape cancels
+//! them dimly; Tab or Right Arrow copies one into the draft and a separate Enter submits. Escape cancels
 //! even a pending suggestion. Popups, Vim Escape, attachments, and paste bursts take precedence.
 //! Interactive transcript footers hide the suggestion and its reserved height until editing resumes.
 //! When recalling a persistent entry, encoded task links restore atomic elements and bindings.
@@ -618,6 +618,7 @@ pub(crate) struct ChatComposer {
     placeholder_text: String,
     prompt_suggestion: Option<crate::prompt_suggestions::PromptSuggestion>,
     suggestion_tab_reserved: KeymapContextSet,
+    suggestion_right_reserved: KeymapContextSet,
     suggestion_tab_accepted: bool,
     blocks_direct_input: bool,
     is_task_running: bool,
@@ -797,6 +798,7 @@ impl ChatComposer {
             placeholder_text,
             prompt_suggestion: None,
             suggestion_tab_reserved: KeymapContextSet::default(),
+            suggestion_right_reserved: KeymapContextSet::default(),
             suggestion_tab_accepted: false,
             blocks_direct_input: false,
             is_task_running: false,
@@ -1039,22 +1041,35 @@ impl ChatComposer {
     /// the same snapshot's editor bindings so a live remap cannot leave submit
     /// keys updated while cursor/editing keys still use old defaults.
     pub(crate) fn set_keymap_bindings(&mut self, keymap: &RuntimeKeymap) {
-        self.suggestion_tab_reserved = crate::keymap::keymap_action_ids()
-            .filter(|action| {
-                matches!(
-                    action.context,
-                    KeymapContext::Editor | KeymapContext::VimNormal | KeymapContext::Composer
-                ) && !(action.context == KeymapContext::Composer && action.action == "queue")
-                    && crate::keymap::bindings_for_action(
-                        keymap,
-                        action.context.config_name(),
-                        action.action,
-                    )
-                    .is_some_and(|bindings| bindings.is_pressed(KeyCode::Tab.into()))
-            })
-            .fold(KeymapContextSet::default(), |contexts, action| {
-                contexts.with(action.context)
-            });
+        for (key, reserved) in [
+            (KeyCode::Tab, &mut self.suggestion_tab_reserved),
+            (KeyCode::Right, &mut self.suggestion_right_reserved),
+        ] {
+            *reserved = crate::keymap::keymap_action_ids()
+                .filter(|action| {
+                    matches!(
+                        action.context,
+                        KeymapContext::Editor | KeymapContext::VimNormal | KeymapContext::Composer
+                    ) && !(key == KeyCode::Tab
+                        && action.context == KeymapContext::Composer
+                        && action.action == "queue")
+                        && !(key == KeyCode::Right
+                            && matches!(
+                                action.context,
+                                KeymapContext::Editor | KeymapContext::VimNormal
+                            )
+                            && action.action == "move_right")
+                        && crate::keymap::bindings_for_action(
+                            keymap,
+                            action.context.config_name(),
+                            action.action,
+                        )
+                        .is_some_and(|bindings| bindings.is_pressed(key.into()))
+                })
+                .fold(KeymapContextSet::default(), |contexts, action| {
+                    contexts.with(action.context)
+                });
+        }
         self.submit_keys = keymap.composer.submit.clone();
         self.queue_keys = keymap.composer.queue.clone();
         self.toggle_shortcuts_keys = keymap.composer.toggle_shortcuts.clone();

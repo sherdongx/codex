@@ -207,7 +207,7 @@ async fn check_suggestion(scenario: Scenario) -> color_eyre::Result<()> {
     let suggestion = requests[1].body_json();
     assert_eq!(suggestion["model"], parent["model"]);
     assert_eq!(suggestion["tools"], serde_json::json!([]));
-    assert_eq!(suggestion["reasoning"]["effort"], "low");
+    assert_eq!(suggestion["reasoning"]["effort"], "high");
     let input = suggestion["input"].to_string();
     assert!(input.contains("Fix the timeout"));
     assert!(input.contains("Fixed the timeout."));
