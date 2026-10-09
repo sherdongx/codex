@@ -1,0 +1,116 @@
+name: Build codex-suggest for Ubuntu
+
+on:
+  push:
+    branches: ["feature/ubuntu-package"]
+    paths:
+      - ".github/workflows/codex-suggest-ubuntu.yml"
+      - ".github/actions/setup-rusty-v8/**"
+      - ".github/scripts/install-musl-*.sh"
+      - "codex-rs/**"
+      - "scripts/codex_package/**"
+      - "scripts/build_codex_package.py"
+      - "scripts/linux/**"
+      - "docs/prompt-suggestions-ubuntu.md"
+      - "third_party/v8/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-suggest-ubuntu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Ubuntu x86_64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CODEX_REPO_ROOT: ${{ github.workspace }}
+      TARGET: x86_64-unknown-linux-musl
+      CARGO_HOME: ${{ github.workspace }}/.cargo-home
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+      CARGO_BUILD_JOBS: "4"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_LTO: "off"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+      CARGO_PROFILE_RELEASE_STRIP: symbols
+      AWS_LC_SYS_NO_JITTER_ENTROPY: "1"
+      AWS_LC_SYS_NO_JITTER_ENTROPY_x86_64_unknown_linux_musl: "1"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+      - name: Check installer and package assembly
+        run: |
+          python3 -m unittest discover -s scripts/linux -p 'test_*.py' -v
+          python3 -m unittest discover -s scripts/codex_package -t scripts -p 'test_*.py'
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+        with:
+          targets: x86_64-unknown-linux-musl
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        id: cargo-cache
+        with:
+          path: |
+            .cargo-home/registry
+            .cargo-home/git
+            codex-rs/target
+          key: codex-suggest-ubuntu-v1-${{ hashFiles('codex-rs/Cargo.lock', 'codex-rs/rust-toolchain.toml') }}
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.14.0
+          use-cache: false
+      - name: Install upstream musl prerequisites
+        run: bash .github/scripts/install-musl-build-tools.sh
+      - uses: ./.github/actions/setup-rusty-v8
+        with:
+          target: x86_64-unknown-linux-musl
+      - name: Build and hash the sandbox helper
+        working-directory: codex-rs
+        run: |
+          cargo build --locked --release --target "$TARGET" --bin bwrap
+          binary="target/$TARGET/release/bwrap"
+          strip --strip-debug --strip-unneeded "$binary"
+          digest=$(sha256sum "$binary" | awk '{print $1}')
+          echo "CODEX_BWRAP_SHA256=$digest" >> "$GITHUB_ENV"
+      - name: Build CLI and code-mode helper
+        working-directory: codex-rs
+        run: cargo build --locked --release --target "$TARGET" --bin codex --bin codex-code-mode-host
+      - name: Save completed build before packaging
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            .cargo-home/registry
+            .cargo-home/git
+            codex-rs/target
+          key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
+      - name: Package and check installed executables
+        run: bash scripts/linux/package-codex-suggest.sh "codex-rs/target/$TARGET/release" dist
+      - name: Check bundled sandbox and Ubuntu startup
+        run: |
+          extracted=$(mktemp -d)
+          tar -xzf dist/*.tar.gz -C "$extracted"
+          packages=("$extracted"/*)
+          package_dir=${packages[0]}
+          bash scripts/linux/check-bundled-sandbox.sh "$package_dir"
+          docker pull ubuntu:24.04
+          docker run --rm --network none \
+            -v "$package_dir:/package:ro" \
+            -v "$PWD/scripts/linux:/checks:ro" \
+            ubuntu:24.04 sh /checks/smoke-codex-suggest.sh /package "/tmp/install prefix"
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: codex-suggest-ubuntu-x86_64
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30

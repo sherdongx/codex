@@ -46,6 +46,8 @@ feature enabled in the official 0.161.0 binary.
 
 For downloadable Apple Silicon and Intel packages, see
 [codex-suggest for macOS](prompt-suggestions-macos.md).
+For the portable Ubuntu x86_64 package, see
+[codex-suggest for Ubuntu](prompt-suggestions-ubuntu.md).
 
 Use the Rust version in `codex-rs/rust-toolchain.toml` and the build prerequisites
 in [install.md](install.md). On this machine Rust is installed separately under
