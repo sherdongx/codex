@@ -12,6 +12,9 @@ on:
       - "scripts/build_codex_package.py"
       - "scripts/linux/**"
       - "docs/prompt-suggestions-ubuntu.md"
+      - "docs/prompt-suggestions-ubuntu-deb.md"
+      - "LICENSE"
+      - "NOTICE"
       - "third_party/v8/**"
   workflow_dispatch:
 
@@ -93,46 +96,24 @@ jobs:
           key: ${{ steps.cargo-cache.outputs.cache-primary-key }}
       - name: Package and check installed executables
         run: bash scripts/linux/package-codex-suggest.sh "codex-rs/target/$TARGET/release" dist
-      - name: Check bundled sandbox and Ubuntu startup
+      - name: Build Debian package
+        run: python3 scripts/linux/build_deb.py dist/*.tar.gz dist
+      - name: Check Debian install and removal in Ubuntu
         run: |
-          extracted=$(mktemp -d)
-          tar -xzf dist/*.tar.gz -C "$extracted"
-          packages=("$extracted"/*)
-          package_dir=${packages[0]}
-          (
-            helper="$package_dir/codex-resources/bwrap"
-            sysctl kernel.apparmor_restrict_unprivileged_userns
-            set +e
-            "$helper" --unshare-user --unshare-net --ro-bind / / -- /bin/true
-            before_profile=$?
-            set -e
-            echo "Unprofiled namespace probe exit status: $before_profile"
-            if [[ "$before_profile" != 0 ]]; then
-              sudo journalctl -k --since '-2 minutes' --no-pager \
-                | grep -E 'apparmor.*(bwrap|userns|net_admin)' || true
-            fi
-            # Ubuntu 24.04 requires an app-specific userns permission. Limit it
-            # to this job's verified helper; leave the global restriction intact.
-            profile=$(mktemp)
-            profile_name="codex_suggest_ci_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
-            printf 'abi <abi/4.0>,\nprofile %s "%s" flags=(unconfined) {\n  userns,\n}\n' \
-              "$profile_name" "$helper" > "$profile"
-            sudo apparmor_parser -a "$profile"
-            trap 'status=$?; if ! sudo apparmor_parser -R "$profile"; then status=1; fi; rm -f "$profile"; exit "$status"' EXIT
-            "$helper" --unshare-user --unshare-net --ro-bind / / -- /bin/true
-            bash scripts/linux/check-bundled-sandbox.sh "$package_dir"
-          )
+          packages=(dist/*.deb)
           docker pull ubuntu:24.04
-          docker run --rm --network none \
-            -v "$package_dir:/package:ro" \
+          docker run --rm -e CODEX_DEB_CONTAINER_TEST=1 \
+            -v "$PWD/${packages[0]}:/package.deb:ro" \
             -v "$PWD/scripts/linux:/checks:ro" \
-            ubuntu:24.04 sh /checks/smoke-codex-suggest.sh /package "/tmp/install prefix"
+            ubuntu:24.04 sh /checks/check-deb-container.sh /package.deb
+      - name: Check installed Debian sandbox
+        run: bash scripts/linux/check-installed-deb.sh dist/*.deb
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: codex-suggest-ubuntu-x86_64
+          name: codex-suggest-ubuntu-amd64-deb
           path: |
-            dist/*.tar.gz
-            dist/*.sha256
+            dist/*.deb
+            dist/*.deb.sha256
           if-no-files-found: error
           compression-level: 0
           retention-days: 30

@@ -1,6 +1,8 @@
-# codex-suggest for Ubuntu
+# Portable Ubuntu build payload
 
-This community build of Codex CLI 0.161.0 adds optional next-prompt suggestions
+This portable archive is the build input for the
+[Ubuntu Debian package](prompt-suggestions-ubuntu-deb.md). The delivered Ubuntu
+release uses that `.deb` format. This community build of Codex CLI 0.161.0 adds optional next-prompt suggestions
 using low reasoning effort. It requires **Ubuntu 24.04 or newer on Intel/AMD 64-bit (x86_64)**.
 The CLI and its code-mode, sandbox, and search helpers are statically linked.
 The bundled patched zsh requires glibc 2.38 or newer and Ubuntu's `libtinfo6`
@@ -53,10 +55,9 @@ in the CLI.
 The Ubuntu workflow checks x86-64 architecture, static helpers, zsh dependencies,
 checksums, extraction,
 installation into paths with spaces, and startup on Ubuntu 24.04.
-It also tests restricted shell execution and helper integrity on the native
-Ubuntu 24.04 runner using a temporary AppArmor profile scoped to the tested
-bubblewrap executable. The profile is removed after the check. These are
-package checks; they do not sign into an account or send model requests.
+The final Debian package is additionally tested through apt installation,
+removal, and restricted shell execution using its package-owned AppArmor profile.
+These checks do not sign into an account or send model requests.
 
 Restricted execution requires a host that permits the necessary user namespaces.
 AppArmor or administrator policy can restrict them, particularly on Ubuntu 24.04.
@@ -72,5 +73,5 @@ and the system-wide namespace restriction enabled.
 
 The `Build codex-suggest for Ubuntu` workflow runs for build-input changes on
 `feature/ubuntu-package`. It uses the upstream musl toolchain and V8 resources,
-builds and hashes bubblewrap before compiling the CLI, and uploads the archive
-and checksum. Actions artifacts expire after 30 days, so keep a downloaded copy.
+builds and hashes bubblewrap before compiling the CLI, and wraps this payload in a Debian package. It uploads the `.deb`
+and its checksum. Actions artifacts expire after 30 days, so keep a downloaded copy.

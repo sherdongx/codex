@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+name=usr.lib.codex-suggest.codex-resources.bwrap
+# Normal removal retains administrator configuration. Purge removes this
+# application's policy files and caches, following dh_apparmor's lifecycle.
+if [ "${1:-}" = purge ] && [ ! -e "/etc/apparmor.d/$name" ]; then
+  rm -f "/etc/apparmor.d/local/$name" "/etc/apparmor.d/disable/$name" \
+    "/etc/apparmor.d/force-complain/$name" "/etc/apparmor.d/cache/$name" \
+    "/var/cache/apparmor/$name" /var/cache/apparmor/*/"$name"
+fi

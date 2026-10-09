@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+if [ "${1:-}" = configure ]; then
+  name=usr.lib.codex-suggest.codex-resources.bwrap
+  mkdir -p /etc/apparmor.d/local
+  if [ ! -e "/etc/apparmor.d/local/$name" ]; then
+    printf '# Administrator overrides for codex-suggest.\n' > "/etc/apparmor.d/local/$name"
+    chmod 644 "/etc/apparmor.d/local/$name"
+  fi
+  # Follow dh_apparmor's nonfatal reload behavior, including container installs.
+  if command -v aa-enabled >/dev/null 2>&1 && aa-enabled --quiet; then
+    if ! apparmor_parser -r -T -W "/etc/apparmor.d/$name"; then
+      echo "AppArmor profile reload failed; ask your administrator to check codex-suggest sandbox permissions." >&2
+    fi
+  fi
+fi
