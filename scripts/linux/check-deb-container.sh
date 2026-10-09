@@ -31,6 +31,7 @@ test "$(sha256sum "$test_home/.local/bin/codex-suggest")" = "$launcher_before"
 test "$(sha256sum /usr/bin/codex)" = "$ordinary_before"
 
 su -s /bin/sh codex-deb-test -c '
+  set -eu
   /usr/bin/codex-suggest --version
   /usr/bin/codex-suggest --help
   /usr/bin/codex-suggest features list

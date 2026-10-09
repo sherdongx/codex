@@ -152,6 +152,48 @@ class DebianPackageTests(unittest.TestCase):
                 build_deb.build(archive, Path(directory) / "output")
             self.assertFalse((Path(directory) / "output").exists())
 
+    def test_unprivileged_startup_failure_is_not_masked(self):
+        with tempfile.TemporaryDirectory(prefix="codex failing deb ") as directory:
+            root = Path(directory)
+            payload = root / self.payload.name
+            shutil.copytree(self.payload, payload)
+            source = root / "failure.c"
+            source.write_text("int main(void) { return 17; }\n")
+            subprocess.run(
+                ["cc", "-static", str(source), "-o", str(payload / "bin/codex")],
+                check=True,
+            )
+            archive = root / self.archive.name
+            with tarfile.open(archive, "w:gz") as package:
+                package.add(payload, arcname=payload.name)
+            archive.with_name(archive.name + ".sha256").write_text(
+                f"{build_deb.sha256(archive)}  {archive.name}\n"
+            )
+            deb = build_deb.build(archive, root / "output")
+            result = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-e",
+                    "CODEX_DEB_CONTAINER_TEST=1",
+                    "--mount",
+                    f"type=bind,src={deb},dst=/package.deb,readonly",
+                    "--mount",
+                    f"type=bind,src={build_deb.REPO / 'scripts/linux'},dst=/checks,readonly",
+                    "ubuntu:24.04",
+                    "sh",
+                    "/checks/check-deb-container.sh",
+                    "/package.deb",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                result.returncode, 17, (result.stdout + result.stderr)[-4000:]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
