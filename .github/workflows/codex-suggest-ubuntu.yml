@@ -99,7 +99,29 @@ jobs:
           tar -xzf dist/*.tar.gz -C "$extracted"
           packages=("$extracted"/*)
           package_dir=${packages[0]}
-          bash scripts/linux/check-bundled-sandbox.sh "$package_dir"
+          (
+            helper="$package_dir/codex-resources/bwrap"
+            sysctl kernel.apparmor_restrict_unprivileged_userns
+            set +e
+            "$helper" --unshare-user --unshare-net --ro-bind / / -- /bin/true
+            before_profile=$?
+            set -e
+            echo "Unprofiled namespace probe exit status: $before_profile"
+            if [[ "$before_profile" != 0 ]]; then
+              sudo journalctl -k --since '-2 minutes' --no-pager \
+                | grep -E 'apparmor.*(bwrap|userns|net_admin)' || true
+            fi
+            # Ubuntu 24.04 requires an app-specific userns permission. Limit it
+            # to this job's verified helper; leave the global restriction intact.
+            profile=$(mktemp)
+            profile_name="codex_suggest_ci_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+            printf 'abi <abi/4.0>,\nprofile %s "%s" flags=(unconfined) {\n  userns,\n}\n' \
+              "$profile_name" "$helper" > "$profile"
+            sudo apparmor_parser -a "$profile"
+            trap 'status=$?; if ! sudo apparmor_parser -R "$profile"; then status=1; fi; rm -f "$profile"; exit "$status"' EXIT
+            "$helper" --unshare-user --unshare-net --ro-bind / / -- /bin/true
+            bash scripts/linux/check-bundled-sandbox.sh "$package_dir"
+          )
           docker pull ubuntu:24.04
           docker run --rm --network none \
             -v "$package_dir:/package:ro" \

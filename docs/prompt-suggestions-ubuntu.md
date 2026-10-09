@@ -54,14 +54,19 @@ The Ubuntu workflow checks x86-64 architecture, static helpers, zsh dependencies
 checksums, extraction,
 installation into paths with spaces, and startup on Ubuntu 24.04.
 It also tests restricted shell execution and helper integrity on the native
-Ubuntu 24.04 runner. These are package checks; they do not sign into an account
-or send model requests.
+Ubuntu 24.04 runner using a temporary AppArmor profile scoped to the tested
+bubblewrap executable. The profile is removed after the check. These are
+package checks; they do not sign into an account or send model requests.
 
 Restricted execution requires a host that permits the necessary user namespaces.
 AppArmor or administrator policy can restrict them, particularly on Ubuntu 24.04.
 The installer does not change security policy. If sandbox startup is blocked,
-ask your administrator to configure the supported sandbox environment; do not
-disable the sandbox to work around installation problems.
+ask your administrator to provide an application-specific `userns` AppArmor
+profile for the installed helper, following
+[Ubuntu's namespace-policy documentation](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions).
+The CI result proves the package in that provisioned environment; it does not
+prove sandbox execution on an untouched Ubuntu installation. Keep the sandbox
+and the system-wide namespace restriction enabled.
 
 ## Rebuild
 
