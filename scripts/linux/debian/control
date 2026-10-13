@@ -1,0 +1,13 @@
+Package: codex-suggest
+Version: @VERSION@
+Section: devel
+Priority: optional
+Architecture: amd64
+Maintainer: Sherdong Cai <sherdong@shanma.net>
+Depends: libc6 (>= 2.38), libtinfo6, ca-certificates, apparmor (>= 4.0)
+Recommends: git
+Installed-Size: @SIZE@
+Homepage: https://github.com/sherdongx/codex
+Description: Codex terminal CLI with next-prompt suggestions
+ Community build of Codex CLI with optional next-prompt suggestions.
+ Includes the code-mode host, sandbox helper, ripgrep and patched zsh.

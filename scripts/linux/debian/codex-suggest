@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+export RUST_LOG="${RUST_LOG:-off}"
+exec /usr/lib/codex-suggest/bin/codex \
+  --no-daemon -c tui.prompt_suggestions=true "$@"
