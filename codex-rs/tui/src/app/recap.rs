@@ -44,7 +44,7 @@ pub(super) const RECAP_PROMPT_MAX_BYTES: usize = RecapPrompt::MAX_BYTES;
 
 #[path = "recap_history.rs"]
 mod history;
-use history::recap_history;
+pub(super) use history::recap_history;
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
