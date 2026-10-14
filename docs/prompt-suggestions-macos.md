@@ -7,12 +7,12 @@ newer**, and each user signs in with their own account.
 ## Download and share
 
 Open the fork's [macOS build workflow](https://github.com/sherdongx/codex/actions/workflows/codex-suggest-macos.yml),
-select a successful run, and download the artifact for your Mac:
+select a successful run, and download the artifact. Future macOS builds target
+Apple Silicon (ARM64) only:
 
 | Mac | Artifact |
 | --- | --- |
 | Apple Silicon (M-series) | `codex-suggest-v0.162.1-macos-arm64` |
-| Intel | `codex-suggest-v0.162.1-macos-x86_64` |
 
 GitHub requires sign-in to download Actions artifacts. Unzip the downloaded
 artifact to get a `.tar.gz` package and matching `.sha256` checksum. You can send
@@ -72,7 +72,7 @@ commit `17561d5b327dd760748c6043899cea618b21a1a9` for compilation.
 `BUILD.txt` records the application source and packaging commits separately.
 The workflow can also be run manually on the packaging branch.
 
-Both native macOS jobs verify packaged architecture, signatures, system-library
+The native macOS ARM64 job verifies packaged architecture, signatures, system-library
 dependencies, archive extraction, installation, and executable startup before
 uploading. These checks do not sign into a real account or exercise a paid model
 request. To update an installation, close `codex-suggest`, extract a newer package,

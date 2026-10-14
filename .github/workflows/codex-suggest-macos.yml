@@ -34,10 +34,6 @@ jobs:
             target: aarch64-apple-darwin
             arch: arm64
             build-jobs: 2
-          - runner: macos-15-intel
-            target: x86_64-apple-darwin
-            arch: x86_64
-            build-jobs: 4
     env:
       CODEX_SOURCE_COMMIT: "17561d5b327dd760748c6043899cea618b21a1a9"
       CODEX_REPO_ROOT: ${{ github.workspace }}/source
